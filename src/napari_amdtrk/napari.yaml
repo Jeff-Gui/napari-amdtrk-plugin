@@ -1,0 +1,25 @@
+name: napari-amdtrk
+display_name: Amend segmentation and track
+contributions:
+  commands:
+    - id: napari-amdtrk.get_reader
+      python_name: napari_amdtrk._reader:napari_get_reader
+      title: Open data with Amend segmentation and track
+    - id: napari-amdtrk.make_sample_data
+      python_name: napari_amdtrk._sample_data:make_sample_data
+      title: Load sample data from Amend segmentation and track
+    - id: napari-amdtrk.make_amdtrkwidget
+      python_name: napari_amdtrk._widget:AmdTrkWidget
+      title: Make amend track widget
+  readers:
+    - command: napari-amdtrk.get_reader
+      accepts_directories: true
+      filename_patterns: ['*']
+  sample_data:
+    - command: napari-amdtrk.make_sample_data
+      display_name: Amend segmentation and track
+      key: unique_id.1
+  widgets:
+    - command: napari-amdtrk.make_amdtrkwidget
+      autogenerate: true
+      display_name: Amend track widget
