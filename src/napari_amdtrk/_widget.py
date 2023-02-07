@@ -233,6 +233,7 @@ class AmdTrkWidget(QWidget):
             copy_obj.update({'ID':0, 'fromFrame':0, 'toFrame':1})
         self.reset_widget = reset_widget
 
+        self.viewer.add_shapes(name='[selection]', edge_width=2*self.DILATE_FACTOR, edge_color='coral', face_color=[0,0,0,0], ndim=3)
         labels = self.viewer.layers[self.segm_id]
         @labels.mouse_drag_callbacks.append
         def click_drag(layer, event):
@@ -266,7 +267,6 @@ class AmdTrkWidget(QWidget):
                     ky = str(pos[0]) + '-' + str(lbl)
                     flg = False
                     if ky not in self.select.keys():  # select object
-                        msk = sle == lbl
     
                         # update widget default values according to selections
                         #  involves two selection
@@ -286,6 +286,16 @@ class AmdTrkWidget(QWidget):
                         register_obj.update({'object_ID':lbl, 'frame':pos[0], 'track':trk_id, 'phase': state})
                         copy_obj.update({'ID':lbl, 'fromFrame':pos[0], 'toFrame': pos[0] + 1})
 
+                        # find the bounding box
+                        msk = sle == lbl
+                        minx, miny, maxx, maxy = measure.regionprops(measure.label(msk))[0].bbox
+                        objBox = np.array([[pos[0], minx, miny], [pos[0], maxx, miny],
+                                           [pos[0], maxx, maxy], [pos[0], minx, maxy]])
+                        idx = len(viewer.layers['[selection]'].data)
+                        new = viewer.layers['[selection]'].data.copy() + [objBox]
+                        self.select[ky] = (objBox, idx)
+
+                        '''Below directly operating on mask is now deprecated
                         # find contour, may be TOO THIN !!!
                         # contour = measure.find_contours(msk)
                         # contour = np.round(contour[0]).astype('int')
@@ -300,13 +310,21 @@ class AmdTrkWidget(QWidget):
                         for i in range(contour.shape[0]):
                             new[contour[i, 0], contour[i, 1]] = self.high
                         self.select[ky] = (sle == lbl, contour)
+                        '''
 
                     else:  # delete object highlight (deselect)
+                        
+                        _, idx = self.select[ky]
+                        new = viewer.layers['[selection]'].data.copy()
+                        del new[idx]
+
+                        '''Below directly operating on mask is now deprecated
                         msk, contour = self.select[ky]
                         new = sle.copy()
                         for i in range(contour.shape[0]):
                             new[contour[i, 0], contour[i, 1]] = 0
                         new[msk] = lbl
+                        '''
 
                         # update widget default values according to selections
                         #  involves two selection
@@ -339,9 +357,7 @@ class AmdTrkWidget(QWidget):
                             del self.select[ky]
 
                     if not flg:
-                        data = layer.data.copy()
-                        data[pos[0], :, :] = new.copy()
-                        layer.data = data
+                        self.viewer.layers['[selection]'].data = new.copy()
                     else:
                         self.clear_selection()
                 else:
@@ -392,14 +408,8 @@ class AmdTrkWidget(QWidget):
 
     def clear_selection(self):
         if len(self.select.keys()) > 0:
-            old_segm = self.viewer.layers[self.segm_id].data.copy()
-            for ky in self.select.keys():
-                fme = int(ky.split('-')[0])
-                _, contour = self.select[ky]
-                for i in range(contour.shape[0]):
-                    old_segm[fme, contour[i, 0], contour[i, 1]] = 0
             self.select = {}
-            self.viewer.layers[self.segm_id].data = old_segm
+            self.viewer.layers['[selection]'].data = []
             self.reset_widget()
         return
 
