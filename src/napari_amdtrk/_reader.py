@@ -57,6 +57,15 @@ def reader_function(path):
         default to layer_type=="image" if not provided
     """
 
+    # handle sample data request
+    if path == 'some URL':
+        #  download from some online source
+        #  store the sample data under home directory
+        if not os.path.isdir('~/.amdtrk'):
+            os.makedirs('~/.amdtrk')
+        
+
+
     # look for config
     try:
         with open(os.path.join(path,'config.yaml'), 'r') as f:

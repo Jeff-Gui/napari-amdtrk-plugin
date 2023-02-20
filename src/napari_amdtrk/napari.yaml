@@ -16,9 +16,9 @@ contributions:
       accepts_directories: true
       filename_patterns: ['*']
   sample_data:
-    - command: napari-amdtrk.make_sample_data
-      display_name: Amend segmentation and track
-      key: unique_id.1
+    - key: napari-amdtrk
+      display_name: amdtrk example
+      uri: some URL
   widgets:
     - command: napari-amdtrk.make_amdtrkwidget
       autogenerate: true
