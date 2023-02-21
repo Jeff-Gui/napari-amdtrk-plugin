@@ -9,9 +9,7 @@
 
 Amend segmentation and track within napari manually
 
-### Demo video
-
-<iframe width="100%" height="100%" src="https://drive.google.com/file/d/1edC9Hw7e4FgD5QXDuUb45dAwRFt-TXFS/preview"></iframe>
+### [:eyes: watch a demo video](https://drive.google.com/file/d/1edC9Hw7e4FgD5QXDuUb45dAwRFt-TXFS/preview)
 
 ----------------------------------
 
