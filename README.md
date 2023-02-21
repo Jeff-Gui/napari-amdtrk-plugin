@@ -9,6 +9,13 @@
 
 Amend segmentation and track within napari manually
 
+### Demo video
+
+<video width="720" height="480" controls>
+<source src="https://drive.google.com/file/d/1edC9Hw7e4FgD5QXDuUb45dAwRFt-TXFS/preview" type="video/mp4">
+Your browser does not support the video tag.
+</video>
+
 ----------------------------------
 
 This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
