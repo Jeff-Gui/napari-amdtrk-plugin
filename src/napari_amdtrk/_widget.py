@@ -1,10 +1,8 @@
 """
-This module is an example of a barebones QWidget plugin for napari
+This module is a QWidget plugin for napari
 
 It implements the Widget specification.
 see: https://napari.org/stable/plugins/guides.html?#widgets
-
-Replace code below according to your needs.
 """
 from typing import TYPE_CHECKING
 
@@ -737,6 +735,7 @@ class AmdTrkWidget(QWidget):
 
     def edit_div(self, par, daugs, new_frame):
         """Change division time of parent and daughter to a new time location
+        TODO: check and implement as a widget function
 
         Args:
             par (int): parent track ID
@@ -756,7 +755,7 @@ class AmdTrkWidget(QWidget):
         time_daugs = []
         sub_daugs = pd.DataFrame()
         for i in daugs:
-            sub_daugs = sub_daugs.append(self.track[self.track['trackId'] == i])
+            sub_daugs = pd.concat([sub_daugs, self.track[self.track['trackId'] == i]], ignore_index=True)
         time_daugs.extend(list(sub_daugs['frame']))
         if new_frame not in list(sub_par['frame']) and new_frame not in time_daugs:
             raise ValueError('Selected new time frame not in either parent or daughter track.')
@@ -851,8 +850,8 @@ class AmdTrkWidget(QWidget):
         # For extra fields
         for i in set(list(self.track.columns)) - set(list(new_row.keys())):
             new_row[i] = np.nan
-
-        self.track = self.track.append(new_row, ignore_index=True)
+        
+        self.track = pd.concat([self.track, pd.DataFrame.from_dict([new_row])[self.track.columns]], ignore_index=True)
         self.track = self.track.sort_values(by=['trackId', 'frame'])
         msg = 'New obj: track ' + str(trk_id) + '; frame ' + str(frame) + '; state ' + cls + '.'
         self.last_reg_id = trk_id
