@@ -56,19 +56,39 @@ def reader_function(path):
         layer. Both "meta", and "layer_type" are optional. napari will
         default to layer_type=="image" if not provided
     """
+    cfgname = 'config.yaml'
 
     # handle sample data request
-    if path == 'some URL':
+    if path == 'simple' or path == 'full':
+        if path == 'full':
+            cfgname = 'config_full.yaml'
         #  download from some online source
         #  store the sample data under home directory
-        if not os.path.isdir('~/.amdtrk'):
-            os.makedirs('~/.amdtrk')
-        
+        home = os.environ['HOME']
+        root = os.path.join(home, '.amdtrk')
+        if not os.path.isdir(root):
+            os.makedirs(root)
+        cwd = os.getcwd()
+        os.chdir(root)
+        flg = False
+        if '_sample_data' not in os.listdir('.'):
+            flg = True
+        else:
+            if len(os.listdir('./_sample_data')) < 6:
+                # broken sample data
+                flg = True
+                os.system('rm -r ./_sample_data')
+
+        if flg:
+            os.system('wget --load-cookies /tmp/cookies.txt \"https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate \'https://docs.google.com/uc?export=download&id=1RV2lNRM6Yb5aOb-Mu0kbqI1_1SeObQgI\' -O- | sed -rn \'s/.*confirm=([0-9A-Za-z_]+).*/\1\n/p\')&id=1AMa-JWSa8u2oGI-kCLt79uPkI5plhF7f\" -O test.tar.gz && rm -rf /tmp/cookies.txt')
+            os.system('tar -zxvf test.tar.gz -C .')
+            os.system('rm test.tar.gz')
+        path = os.path.join(root, '_sample_data')
 
 
     # look for config
     try:
-        with open(os.path.join(path,'config.yaml'), 'r') as f:
+        with open(os.path.join(path, cfgname), 'r') as f:
             cfg = yaml.safe_load(f.read())
     except:
         raise FileNotFoundError('Missing config file.')

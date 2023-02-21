@@ -16,9 +16,12 @@ contributions:
       accepts_directories: true
       filename_patterns: ['*']
   sample_data:
-    - key: napari-amdtrk
-      display_name: amdtrk example
-      uri: some URL
+    - key: napari-amdtrk - simple
+      display_name: basic tracks
+      uri: simple
+    - key: napari-amdtrk - full
+      display_name: complete cell cycle tracks
+      uri: full
   widgets:
     - command: napari-amdtrk.make_amdtrkwidget
       autogenerate: true

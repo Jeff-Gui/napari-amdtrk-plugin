@@ -1,5 +1,5 @@
 src/napari_amdtrk/_sample_data
-_sample_data.zip
+amdtrk_sample_data.tar.gz
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
