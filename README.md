@@ -13,6 +13,25 @@ Amend segmentation and track within napari manually
 
 ----------------------------------
 
+### Input data structure
+
+The essential input files include:
+- An intensity image (`tif`)
+- An object mask (`tif`)
+- An object table (`csv`)
+- A config file named `config.yaml`
+
+    Within the config file, there should be 
+
+----------------------------------
+
+### Sample data
+
+Sample cell track videos have been published with [_pcnaDeep: a fast and robust single-cell tracking method using deep-learning mediated cell cycle profiling_](10.1093/bioinformatics/btac602).
+
+
+----------------------------------
+
 This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
 
 <!--

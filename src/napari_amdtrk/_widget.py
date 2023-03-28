@@ -5,7 +5,7 @@ It implements the Widget specification.
 see: https://napari.org/stable/plugins/guides.html?#widgets
 """
 from typing import TYPE_CHECKING
-
+import warnings
 from magicgui import magicgui
 from magicgui.widgets import RadioButtons, Container
 from qtpy.QtWidgets import QWidget
@@ -15,6 +15,7 @@ import skimage.io as io
 import skimage.measure as measure
 import skimage.morphology as morphology
 import pandas as pd
+import trackpy
 
 if TYPE_CHECKING:
     import napari
@@ -79,6 +80,13 @@ class AmdTrkWidget(QWidget):
             self.clear_selection()
             msg = self.save()
             return msg
+        
+        @magicgui(labels=True, result_widget=True)
+        def retrack(distance: int, frame_gap: int):
+            self.clear_selection()
+            msg = self.retrack(distance=distance, frame_gap=frame_gap)
+            self.refresh()
+            return msg
 
         @magicgui(labels=True, result_widget=True)
         def create_or_replace(track_A: int, track_B: int=0, frame: int=0):
@@ -139,9 +147,10 @@ class AmdTrkWidget(QWidget):
                                     (" Delete track", 2), (" Link mother - daughter", 3),
                                     (" Unlink mother - daughter", 4), (" Register object", 5),
                                     (" Swap track A with B", 6), (" Keep selected tracks", 7),
-                                    (" Copy an object to another frame",8)]
+                                    (" Copy an object to another frame",8),
+                                    (" Re-track with TrackPy", 9)]
         if phaseVis:
-            btnChoice.append((" Edit state", 9))
+            btnChoice.append((" Edit state", 10))
         btns = RadioButtons(name='',
                             choices=btnChoice,
                             orientation='vertical',
@@ -187,22 +196,24 @@ class AmdTrkWidget(QWidget):
         def _toggle_visibility(value: str):
             # helps to avoid a flicker
             for x in [create_or_replace, delete, phase, create_par, delete_par, 
-                      register_obj, swap, keep_tracks, copy_obj]:
+                      register_obj, swap, keep_tracks, copy_obj, retrack]:
                 x.visible = False
             create_or_replace.visible = value == 1
             delete.visible = value == 2
-            phase.visible = value == 9
+            phase.visible = value == 10
             create_par.visible = value == 3
             delete_par.visible = value == 4
             register_obj.visible = value == 5
             swap.visible = value == 6
             keep_tracks.visible = value == 7
             copy_obj.visible = value == 8
+            retrack.visible = value == 9
+            
         widget_map = {1:create_or_replace, 2:delete, 9:phase, 3:create_par, 4:delete_par, 
-                      5:register_obj, 6:swap, 7:keep_tracks, 8:copy_obj}
+                      5:register_obj, 6:swap, 7:keep_tracks, 8:copy_obj, 9:retrack}
 
         container_opt = Container(widgets=[btns, create_or_replace, delete, phase, create_par, 
-                                           delete_par, register_obj, swap, keep_tracks, copy_obj],
+                                           delete_par, register_obj, swap, keep_tracks, copy_obj, retrack],
                                 layout='vertical',
                                 labels=False)
 
@@ -218,7 +229,7 @@ class AmdTrkWidget(QWidget):
 
         def reset_widget():
             
-            nonlocal create_or_replace, delete, phase, create_par, delete_par, register_obj, keep_tracks
+            nonlocal create_or_replace, delete, phase, create_par, delete_par, register_obj, keep_tracks, retrack
             
             swap.update({'track_B':0, 'track_A':0, 'frame':0})
             create_or_replace.update({'track_B':0, 'track_A':0, 'frame':0})
@@ -229,15 +240,25 @@ class AmdTrkWidget(QWidget):
             register_obj.update({'object_ID':0, 'frame':0, 'track':0, 'phase': self.states[0]})
             keep_tracks.update({'IDs':''})
             copy_obj.update({'ID':0, 'fromFrame':0, 'toFrame':1})
+            retrack.update({'distance':0, 'frame_gap':0})
         self.reset_widget = reset_widget
 
         self.viewer.add_shapes(name='[selection]', edge_width=2*self.DILATE_FACTOR, edge_color='coral', face_color=[0,0,0,0], ndim=3)
+        
         labels = self.viewer.layers[self.segm_id]
+        #sels = self.viewer.layers['[selection]']
+        #trkly = self.viewer.layers[self.track_id]
+        #namely = self.viewer.layers[self.name_id]
+        
+        #@sels.mouse_drag_callbacks.append
         @labels.mouse_drag_callbacks.append
+        #@trkly.mouse_drag_callbacks.append
+        #@namely.mouse_drag_callbacks.append
         def click_drag(layer, event):
             
-            nonlocal create_or_replace, delete, phase, create_par, delete_par, register_obj, copy_obj
-            
+            nonlocal create_or_replace, delete, phase, create_par, delete_par, register_obj, copy_obj, retrack
+            # nonlocal labels
+            # layer = labels
             if event.type == 'mouse_press' and layer.mode == 'pan_zoom':
                 pos = event.position
                 # label position, only work for txy (t+2D) data!
@@ -378,7 +399,7 @@ class AmdTrkWidget(QWidget):
         def _toggle_up(self):
             nonlocal btns, phaseVis
             if btns.value == 1:
-                btns.value = 9 if phaseVis else 8
+                btns.value = 10 if phaseVis else 9
             else:
                     btns.value -= 1
             return
@@ -386,10 +407,10 @@ class AmdTrkWidget(QWidget):
         @self.viewer.bind_key('Down')
         def _toggle_down(self):
             nonlocal btns, phaseVis
-            if btns.value == 9:
+            if btns.value == 10:
                 btns.value = 1
             else:
-                if not phaseVis and btns.value == 8:
+                if not phaseVis and btns.value == 9:
                     btns.value = 1
                 else:
                     btns.value += 1
@@ -722,6 +743,27 @@ class AmdTrkWidget(QWidget):
         self.viewer.layers[self.segm_id].data = self.mask.copy()
         self.track = self.saved.copy()
         msg = 'Reverted: ' + get_current_time() + '.'
+        return msg
+    
+    def retrack(self, distance, frame_gap):
+        trk = self.track.copy()
+        trk['index'] = trk.index
+        t = trackpy.link(trk[['frame', 'Center_of_the_object_0', 'Center_of_the_object_1', 'index']], 
+                         search_range=distance, memory=frame_gap, adaptive_stop=0.4*distance, 
+                         pos_columns=['Center_of_the_object_0', 'Center_of_the_object_1'])
+        cols = list(t.columns)
+        cols[len(cols)-1] = 'trackId'
+        t.columns = cols
+        t = t.sort_values(by=['trackId', 'frame'])
+        trk.loc[t['index']]
+        
+        trk['lineageId'] = trk['trackId']
+        trk['parentTrackId'] = 0            # TODO resolve previously associated mitosis
+        del trk['index']
+        trk.index = [_ for _ in range(trk.shape[0])]
+        self.track = trk.copy()
+
+        msg = 'Re-tracked.'
         return msg
 
     def getAnn(self):
