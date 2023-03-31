@@ -79,6 +79,7 @@ class AmdTrkWidget(QWidget):
         def save(sv):
             self.clear_selection()
             msg = self.save()
+            self.refresh()
             return msg
         
         @magicgui(labels=True, result_widget=True)
@@ -86,6 +87,7 @@ class AmdTrkWidget(QWidget):
             self.clear_selection()
             msg = self.retrack(distance=distance, frame_gap=frame_gap)
             self.refresh()
+            print('refreshed')
             return msg
 
         @magicgui(labels=True, result_widget=True)
@@ -723,7 +725,7 @@ class AmdTrkWidget(QWidget):
         mask = self.viewer.layers[self.segm_id].data
         track = self.track.copy()
         if mask_flag:
-            mask, track = align_table_and_mask(track, mask, align_morph=True)
+            mask, track = align_table_and_mask(track, mask, align_morph=False)      # warning: align_morph=False
             if int(np.max(mask)) <= 255:
                 io.imsave(self.mask_path, mask.astype('uint8'))
             else:
@@ -754,15 +756,15 @@ class AmdTrkWidget(QWidget):
         cols = list(t.columns)
         cols[len(cols)-1] = 'trackId'
         t.columns = cols
-        t = t.sort_values(by=['trackId', 'frame'])
-        trk.loc[t['index']]
+        trk.loc[t['index'], 'trackId'] = t['trackId'] + 1   # trackpy output start from ID=0
         
         trk['lineageId'] = trk['trackId']
         trk['parentTrackId'] = 0            # TODO resolve previously associated mitosis
         del trk['index']
+        trk = trk.sort_values(by=['trackId', 'frame'])
         trk.index = [_ for _ in range(trk.shape[0])]
-        self.track = trk.copy()
 
+        self.track = trk.copy()
         msg = 'Re-tracked.'
         return msg
 
@@ -849,9 +851,22 @@ class AmdTrkWidget(QWidget):
         mask = self.viewer.layers[self.segm_id].data
         msk_slice = mask[frame, :, :]
         trk_slice = self.track[self.track['frame'] == frame]
+        untracked = False if int(trk_id) > 0 else True          # register as an untracked object
         if obj_id in list(trk_slice['continuous_label']):
-            raise ValueError('Object label has been occupied, draw with a bigger label. Current max label: ' +
-                             str(np.max(trk_slice['continuous_label'])))
+            if list(trk_slice[trk_slice['continuous_label'] == obj_id]['trackId'])[0] == 0:
+                # assign information to untracked object
+                idx = list(trk_slice[trk_slice['continuous_label'] == obj_id]['trackId'].index)[0]
+                self.track.loc[idx, 'trackId'] = trk_id
+                self.track.loc[idx, 'lineageId'] = trk_id
+                if self.hasState:
+                    self.track[self.stateColName].loc[idx] = cls
+                self.track = self.track.sort_values(by=['trackId', 'frame'])
+                msg = 'Assign obj: track ' + str(trk_id) + '; frame ' + str(frame) + '; state ' + cls + '.'
+                self.last_reg_id = trk_id
+                return msg
+            else:
+                raise ValueError('Object label has been used, draw with a bigger label. Current max label: ' +
+                                  str(np.max(trk_slice['continuous_label'])))
         if trk_id in list(trk_slice['trackId']):
             raise ValueError('Track ID already exists in the selected frame.')
         if cls not in self.states:
@@ -874,6 +889,11 @@ class AmdTrkWidget(QWidget):
                 nm = '-'.join([str(trk_id), str(old_par), cls])
             else:
                 nm = '-'.join([str(trk_id), cls])
+        elif untracked:
+            new_row['lineageId'] = 0
+            new_row['trackId'] = 0
+            new_row['parentTrackId'] = 0
+            nm = 'unassigned'
         else:
             # New track
             self.track_count = int(np.max((self.track_count, trk_id)))
@@ -929,8 +949,9 @@ class AmdTrkWidget(QWidget):
 
     def refresh(self):
         self.getAnn()
-        track_data = self.track.loc[:][['trackId', 'frame', 'Center_of_the_object_1', 'Center_of_the_object_0']]
-        track_data = track_data.to_numpy()
+        track_data = self.track.loc[:][['trackId', 'frame', 'Center_of_the_object_1', 'Center_of_the_object_0']].copy()
+        track_data = track_data[track_data['trackId']>0] # unassigned tracks have ID=0, not allowed for napari to plot.
+        track_data = track_data.to_numpy().astype('float')
         self.viewer.layers[self.track_id].data = track_data
         label_data = self.track.loc[:][['frame', 'Center_of_the_object_1', 'Center_of_the_object_0']]
         label_data = label_data.to_numpy()
@@ -939,3 +960,4 @@ class AmdTrkWidget(QWidget):
         self.viewer.layers[self.name_id].features['name'] = self.track.loc[:]['name'].to_numpy()
         self.viewer.layers[self.name_id].refresh_text()
         self.clear_selection()
+        return

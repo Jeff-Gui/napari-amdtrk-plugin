@@ -26,13 +26,16 @@ def get_annotation(track, hasState, stateColName):
     parent_id = list(track['parentTrackId'])
     cls_lb = list(track[cls_col])
     for i in range(track.shape[0]):
-        if hasState:
-            inform = [str(track_id[i]), str(parent_id[i]), cls_lb[i]]
+        if int(track_id[i]) > 0:
+            if hasState:
+                inform = [str(track_id[i]), str(parent_id[i]), cls_lb[i]]
+            else:
+                inform = [str(track_id[i]), str(parent_id[i])]
+            if inform[1] == '0':
+                del inform[1]
+            ann.append('-'.join(inform))
         else:
-            inform = [str(track_id[i]), str(parent_id[i])]
-        if inform[1] == '0':
-            del inform[1]
-        ann.append('-'.join(inform))
+            ann.append('unassigned')
     track['name'] = ann
     return track
 
@@ -48,8 +51,16 @@ def align_table_and_mask(table, mask, align_morph=False):
 
     count = 0
     count_up = 0
-    if align_morph:
-        new = pd.DataFrame()
+    nrow = table.shape[0]
+    new = pd.DataFrame()
+    
+    empty_row = table.iloc[0].copy()
+    for i in empty_row.index:
+        empty_row[i] = np.nan
+    empty_row['parentTrackId'] = 0
+    empty_row['trackId'] = 0      # set to NaN will cause napari error
+    empty_row['lineageId'] = 0
+    
     for i in range(mask.shape[0]):
         sub = table[table['frame'] == i].copy()
         sls = mask[i,:,:].copy()
@@ -57,12 +68,40 @@ def align_table_and_mask(table, mask, align_morph=False):
         if lbs[0] == 0:
             del lbs[0]
         registered = list(sub['continuous_label'])
+
+        # objects in the mask but not registered in the table - register with default value
+        # TODO address situation: user draw mask with label same as another object, how can we detect?
         rmd = list(set(lbs) - set(registered))
         if rmd:
             for j in rmd:
-                sls[sls == j] = 0
+                tempsls = sls.copy()
+                tempsls[tempsls!=j] = 0
+                ct = 0
+                for p in measure.regionprops(tempsls):
+                    y,x = p.centroid
+                    row = empty_row.copy()
+                    row['frame'] = i
+                    row['continuous_label'] = j
+                    row['Center_of_the_object_0'] = x
+                    row['Center_of_the_object_1'] = y
+                    row = pd.DataFrame(row)
+                    row.columns = [nrow+1]
+                    nrow += 1
+                    sub = pd.concat([sub, row.transpose()], axis=0)
+                    ct += 1
+                assert ct == 1
                 count += 1
-            mask[i,:,:] = sls
+                # sls[sls == j] = 0
+            # mask[i,:,:] = sls
+        
+        # objects in the table but not in the mask - unregister them
+        to_unregister = list(set(registered) - set(lbs))
+        count2 = 0
+        if to_unregister:
+            for j in to_unregister:
+                sub = sub[~sub['continuous_label'].isin(to_unregister)]
+                count2 += 1
+        
         if align_morph:
             props = measure.regionprops(mask[i,:,:])
             for p in props:
@@ -80,15 +119,17 @@ def align_table_and_mask(table, mask, align_morph=False):
                     # Update morphology
                     sub.loc[obj.index, 'Center_of_the_object_0'] = x
                     sub.loc[obj.index, 'Center_of_the_object_1'] = y
-            new = pd.concat([new, sub.copy()])
+        new = pd.concat([new, sub.copy()])
+        new.index = [_ for _ in range(new.shape[0])]
     
-    print('Removed ' + str(count) + ' objects.')
-
+    if count:
+        print('Registered ' + str(count) + ' objects with spatial information only.')
+    if count2:
+        print('Removed ' + str(count2) + ' objects from the table.')
     if align_morph:
         print('Updated ' + str(count_up) + ' objects.')
-        return mask, new
-    else:
-        return mask
+    
+    return mask, new
 
 
 def expand_bbox(bbox, factor, limit):
