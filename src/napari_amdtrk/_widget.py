@@ -93,6 +93,7 @@ class AmdTrkWidget(QWidget):
         @magicgui(labels=True, result_widget=True)
         def create_or_replace(track_A: int, track_B: int=0, frame: int=0):
             self.clear_selection()
+            self.check_assign([track_A, track_B])
             if track_B < 1:
                 track_B = None
             msg = self.create_or_replace(track_A, frame, track_B)
@@ -102,6 +103,7 @@ class AmdTrkWidget(QWidget):
         @magicgui(labels=True, result_widget=True)
         def swap(track_A: int, track_B: int=0, frame: int=0):
             self.clear_selection()
+            self.check_assign([track_A, track_B])
             if track_B < 1:
                 raise ValueError('Must specify two tracks to swap!')
             msg = self.swap(track_A, frame, track_B)
@@ -120,6 +122,7 @@ class AmdTrkWidget(QWidget):
         @magicgui(labels=True, result_widget=True)
         def create_par(mother: int, daughter: int):
             self.clear_selection()
+            self.check_assign([mother, daughter])
             msg = self.create_parent(mother, daughter)
             self.refresh()
             return msg
@@ -127,6 +130,7 @@ class AmdTrkWidget(QWidget):
         @magicgui(labels=True, result_widget=True)
         def delete_par(daughter: int):
             self.clear_selection()
+            self.check_assign([daughter])
             msg = self.del_parent(daughter)
             self.refresh()
             return msg
@@ -186,6 +190,7 @@ class AmdTrkWidget(QWidget):
                 })
         def phase(track: int, frame_start: int, frame_end: int, phase=states[0], mode=1):
             self.clear_selection()
+            self.check_assign([track])
             mode_rev = {1: 'to_next', 2: 'single', 3: 'range'}
             if mode == 3:
                 msg = self.correct_cls(track, frame_start, phase, mode_rev[mode], frame_end)
@@ -233,6 +238,7 @@ class AmdTrkWidget(QWidget):
             
             nonlocal create_or_replace, delete, phase, create_par, delete_par, register_obj, keep_tracks, retrack
             
+            # Default value of sub-widgets
             swap.update({'track_B':0, 'track_A':0, 'frame':0})
             create_or_replace.update({'track_B':0, 'track_A':0, 'frame':0})
             create_par.update({'daughter':0, 'mother':0})
@@ -432,6 +438,12 @@ class AmdTrkWidget(QWidget):
             self.select = {}
             self.viewer.layers['[selection]'].data = []
             self.reset_widget()
+        return
+    
+    def check_assign(self, IDs_to_check):
+        for i in IDs_to_check:
+            if i == 0:
+                raise ValueError('Must first assign track ID to the object!')
         return
 
     #================== Widget functions =======================
@@ -661,10 +673,14 @@ class AmdTrkWidget(QWidget):
         mask = self.viewer.layers[self.segm_id].data
         del_trk = self.track[self.track['trackId'] == trk_id]
         if frame is None:
-            # For all direct daughter of the track to delete, first remove association
-            dir_daugs = list(np.unique(self.track.loc[self.track['parentTrackId'] == trk_id, 'trackId']))
-            for dd in dir_daugs:
-                self.del_parent(dd)
+
+            if trk_id != 0:
+                # For all direct daughter of the track to delete, first remove association
+                dir_daugs = list(np.unique(self.track.loc[self.track['parentTrackId'] == trk_id, 'trackId']))
+                for dd in dir_daugs:
+                    self.del_parent(dd)
+            else:
+                warnings.warn('Deleting all unassigned objects.')
 
             # Delete entire track
             for i in range(del_trk.shape[0]):
@@ -924,8 +940,13 @@ class AmdTrkWidget(QWidget):
         if fromFrame == toFrame:
             raise ValueError('Cannot copy object on the same frame.')
         row = self.track[(self.track['frame'] == fromFrame) & (self.track['continuous_label'] == ID)]
+        mask = self.viewer.layers[self.segm_id].data
         if row.shape[0] != 1:
-            raise ValueError('ID not found in fromFrame.')
+            # If unassigned object found in fromFrame, register it first.
+            if ID in np.unique(mask[fromFrame,:,:]):
+                self.register_obj(obj_id=ID, frame=fromFrame, trk_id=0, cls=self.states[0])
+            else:
+                raise ValueError('ID not found in fromFrame.')
         
         tar_mx = self.get_mx(toFrame)
         row.loc[row.index, 'continuous_label'] = tar_mx + 1
@@ -934,7 +955,6 @@ class AmdTrkWidget(QWidget):
         new_track = new_track.sort_values(by=['trackId','frame'])
         new_track.index = [_ for _ in range(new_track.shape[0])]
         self.track = new_track
-        mask = self.viewer.layers[self.segm_id].data
         toMask = mask[toFrame,:,:].copy()
         fromMask = mask[fromFrame,:,:]
         toMask[fromMask==ID] = tar_mx + 1
