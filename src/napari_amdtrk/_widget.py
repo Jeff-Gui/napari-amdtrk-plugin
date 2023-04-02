@@ -13,7 +13,6 @@ from ._utils import get_current_time, get_layer_id_by_name, find_daugs, align_ta
 import numpy as np
 import skimage.io as io
 import skimage.measure as measure
-import skimage.morphology as morphology
 import pandas as pd
 import trackpy
 
@@ -54,7 +53,11 @@ class AmdTrkWidget(QWidget):
 
         self.high = 255 if np.max(self.viewer.layers[self.segm_id].data) < 255 else 65536
         self.select = {}  # register selected obj (key: frame-label, value: (mask,contour))
+        self.last_reg_id = 0
+        self.label_unassigned = -1
 
+
+        #================== Widget definitions =======================
 
         @magicgui(labels=False,
           auto_call=True,
@@ -149,22 +152,6 @@ class AmdTrkWidget(QWidget):
             self.refresh()
             return msg
 
-        btnChoice = [(" Replace track A with B or \n Create track from certain frame", 1),
-                                    (" Delete track", 2), (" Link mother - daughter", 3),
-                                    (" Unlink mother - daughter", 4), (" Register object", 5),
-                                    (" Swap track A with B", 6), (" Keep selected tracks", 7),
-                                    (" Copy an object to another frame",8),
-                                    (" Re-track with TrackPy", 9)]
-        if phaseVis:
-            btnChoice.append((" Edit state", 10))
-        btns = RadioButtons(name='',
-                            choices=btnChoice,
-                            orientation='vertical',
-                            label='',
-                            )
-        btns.value = 1
-
-        self.last_reg_id = 0
         @magicgui(labels=True,
                 result_widget=True,
                 phase={
@@ -198,7 +185,24 @@ class AmdTrkWidget(QWidget):
                 msg = self.correct_cls(track, frame_start, phase, mode_rev[mode])
             self.refresh()
             return msg
+        
 
+        #================== Widget interactions =======================
+
+        btnChoice = [(" Replace track A with B or \n Create track from certain frame", 1),
+                                    (" Delete track", 2), (" Link mother - daughter", 3),
+                                    (" Unlink mother - daughter", 4), (" Register object", 5),
+                                    (" Swap track A with B", 6), (" Keep selected tracks", 7),
+                                    (" Copy an object to another frame",8),
+                                    (" Commit mask and re-track (TrackPy)", 9)]
+        if phaseVis:
+            btnChoice.append((" Edit state", 10))
+        btns = RadioButtons(name='',
+                            choices=btnChoice,
+                            orientation='vertical',
+                            label='',
+                            )
+        btns.value = 1
         @btns.changed.connect
         def _toggle_visibility(value: str):
             # helps to avoid a flicker
@@ -218,6 +222,8 @@ class AmdTrkWidget(QWidget):
             
         widget_map = {1:create_or_replace, 2:delete, 9:phase, 3:create_par, 4:delete_par, 
                       5:register_obj, 6:swap, 7:keep_tracks, 8:copy_obj, 9:retrack}
+        if self.hasState:
+            widget_map[10] = phase
 
         container_opt = Container(widgets=[btns, create_or_replace, delete, phase, create_par, 
                                            delete_par, register_obj, swap, keep_tracks, copy_obj, retrack],
@@ -308,6 +314,7 @@ class AmdTrkWidget(QWidget):
                             create_par.update({'mother':trk_id})
                         #  only one selection
                         delete.update({'track':trk_id, 'frame':pos[0]})
+                        self.label_unassigned = lbl
                         phase.update({'track':trk_id, 'frame_start':pos[0]})
                         delete_par.update({'daughter':trk_id})
                         register_obj.update({'object_ID':lbl, 'frame':pos[0], 'track':trk_id, 'phase': state})
@@ -322,36 +329,11 @@ class AmdTrkWidget(QWidget):
                         new = viewer.layers['[selection]'].data.copy() + [objBox]
                         self.select[ky] = (objBox, idx)
 
-                        '''Below directly operating on mask is now deprecated
-                        # find contour, may be TOO THIN !!!
-                        # contour = measure.find_contours(msk)
-                        # contour = np.round(contour[0]).astype('int')
-
-                        # or use dilation
-                        for i in range(self.DILATE_FACTOR):
-                            msk = morphology.binary_dilation(msk)
-                        contour = np.where(((msk == True) * (sle != lbl)) == True)
-                        contour = np.stack(contour, axis=1)
-
-                        new = sle.copy()
-                        for i in range(contour.shape[0]):
-                            new[contour[i, 0], contour[i, 1]] = self.high
-                        self.select[ky] = (sle == lbl, contour)
-                        '''
-
                     else:  # delete object highlight (deselect)
                         
                         _, idx = self.select[ky]
                         new = viewer.layers['[selection]'].data.copy()
                         del new[idx]
-
-                        '''Below directly operating on mask is now deprecated
-                        msk, contour = self.select[ky]
-                        new = sle.copy()
-                        for i in range(contour.shape[0]):
-                            new[contour[i, 0], contour[i, 1]] = 0
-                        new[msk] = lbl
-                        '''
 
                         # update widget default values according to selections
                         #  involves two selection
@@ -375,6 +357,7 @@ class AmdTrkWidget(QWidget):
                             create_par.update({'mother':0})
                         #  only one selection
                         delete.update({'track':0, 'frame':0})
+                        self.label_unassigned = -1
                         phase.update({'track':0, 'frame_start':0})
                         delete_par.update({'daughter':0})
                         register_obj.update({'object_ID':0, 'frame':0, 'track':0, 'phase': self.states[0]})
@@ -430,7 +413,6 @@ class AmdTrkWidget(QWidget):
         # self.setLayout(QHBoxLayout())
         # self.layout().addWidget(container_ext)
         self.viewer.window.add_dock_widget(container_ext, area='left')
-
         return
 
     def clear_selection(self):
@@ -445,6 +427,7 @@ class AmdTrkWidget(QWidget):
             if i == 0:
                 raise ValueError('Must first assign track ID to the object!')
         return
+
 
     #================== Widget functions =======================
 
@@ -461,6 +444,10 @@ class AmdTrkWidget(QWidget):
             raise ValueError('Selected track is not in the table.')
         if frame not in list(self.track[self.track['trackId'] == old_id]['frame']):
             raise ValueError('Selected frame is not in the original track.')
+        relabel = False
+        if new_id not in self.track['trackId'].values:
+            # raise ValueError('Selected new ID not in the table.')
+            relabel = True
 
         dir_daugs = list(np.unique(self.track.loc[self.track['parentTrackId'] == old_id, 'trackId']))
         for dd in dir_daugs:
@@ -472,24 +459,30 @@ class AmdTrkWidget(QWidget):
             new_lin = new
             new_par = 0
         else:
-            if new_id not in self.track['trackId'].values:
-                raise ValueError('Selected new ID not in the table.')
-            old_frame = list(self.track[self.track['trackId'] == new_id]['frame'])
-            new_frame = list(self.track.loc[(self.track['trackId'] == old_id) &
-                                            (self.track['frame'] >= frame), 'frame'])
-            if len(old_frame + new_frame) != len(set(old_frame + new_frame)):
-                raise ValueError('Selected new ID track overlaps with old one.')
-
             new = new_id
-            new_lin = self.track[self.track['trackId'] == new_id]['lineageId'].values[0]
-            new_par = self.track[self.track['trackId'] == new_id]['parentTrackId'].values[0]
+            if relabel:
+                new_lin = self.track[self.track['trackId'] == old_id]['lineageId'].values[0]
+                if new_lin == old_id: # if this track is a root track, or is not involved in mitosis
+                    new_lin = new
+                new_par = self.track[self.track['trackId'] == old_id]['parentTrackId'].values[0]
+            else:
+                old_frame = list(self.track[self.track['trackId'] == new_id]['frame'])
+                new_frame = list(self.track.loc[(self.track['trackId'] == old_id) &
+                                                (self.track['frame'] >= frame), 'frame'])
+                if len(old_frame + new_frame) != len(set(old_frame + new_frame)):
+                    raise ValueError('Selected new ID track overlaps with old one.')
+                new_lin = self.track[self.track['trackId'] == new_id]['lineageId'].values[0]
+                new_par = self.track[self.track['trackId'] == new_id]['parentTrackId'].values[0]
+        
         self.track.loc[(self.track['trackId'] == old_id) & (self.track['frame'] >= frame), 'trackId'] = new
         self.track.loc[self.track['trackId'] == new, 'lineageId'] = new_lin
         self.track.loc[self.track['trackId'] == new, 'parentTrackId'] = new_par
+        
         # daughters of the new track, change lineage
-        daugs = find_daugs(self.track, new)
-        if daugs:
-            self.track.loc[self.track['trackId'].isin(daugs), 'lineageId'] = new_lin
+        if not relabel:
+            daugs = find_daugs(self.track, new)
+            if daugs:
+                self.track.loc[self.track['trackId'].isin(daugs), 'lineageId'] = new_lin
         for dd in dir_daugs:
             if dd != new:
                 self.create_parent(new, dd)
@@ -680,7 +673,7 @@ class AmdTrkWidget(QWidget):
                 for dd in dir_daugs:
                     self.del_parent(dd)
             else:
-                warnings.warn('Deleting all unassigned objects.')
+                warnings.warn('Deleting all unassigned objects in all frames')
 
             # Delete entire track
             for i in range(del_trk.shape[0]):
@@ -690,16 +683,26 @@ class AmdTrkWidget(QWidget):
                 msk_slice[msk_slice == lb] = 0
                 mask[fme, :, :] = msk_slice
             self.track = self.track.drop(index=del_trk.index)
+            msg = 'Deleted track ' + str(trk_id) + '.'
         else:
-            del_trk = del_trk[del_trk['frame'] == frame]
-            lb = del_trk['continuous_label'].iloc[0]
+            if trk_id != 0:
+                del_trk = del_trk[del_trk['frame'] == frame]
+                lb = del_trk['continuous_label'].iloc[0]
+            else:
+                lb = self.label_unassigned
             msk_slice = mask[frame, :, :]
             msk_slice[msk_slice == lb] = 0
             mask[frame, :, :] = msk_slice
-            self.track = self.track.drop(index=self.track[(self.track['trackId'] == trk_id) &
-                                                          (self.track['frame'] == frame)].index)
+            if trk_id != 0:
+                self.track = self.track.drop(index=self.track[(self.track['trackId'] == trk_id) &
+                                                              (self.track['frame'] == frame)].index)
+                msg = 'Deleted track ' + str(trk_id) + ' at frame ' + str(frame) + '.'
+            else:
+                self.track = self.track.drop(index=self.track[(self.track['trackId'] == trk_id) &
+                                                              (self.track['frame'] == frame) &
+                                                              (self.track['continuous_label'] == lb)].index)
+                msg = 'Deleted unassigned object ' + str(lb) + ' at frame ' + str(frame) + '.'
         self.viewer.layers[self.segm_id].data = mask
-        msg = 'Deleted track ' + str(trk_id) + '.'
         print(msg)
         return msg
 
@@ -741,7 +744,8 @@ class AmdTrkWidget(QWidget):
         mask = self.viewer.layers[self.segm_id].data
         track = self.track.copy()
         if mask_flag:
-            mask, track = align_table_and_mask(track, mask, align_morph=False)      # warning: align_morph=False
+            mask, track = align_table_and_mask(track, mask, align_morph=False, 
+                                               phase_col=self.stateColName, phase_default=self.states[0])      # warning: align_morph=False
             if int(np.max(mask)) <= 255:
                 io.imsave(self.mask_path, mask.astype('uint8'))
             else:
@@ -765,6 +769,8 @@ class AmdTrkWidget(QWidget):
     
     def retrack(self, distance, frame_gap):
         trk = self.track.copy()
+        mask = self.viewer.layers[self.segm_id].data
+        mask, trk = align_table_and_mask(trk, mask, align_morph=False)   
         trk['index'] = trk.index
         t = trackpy.link(trk[['frame', 'Center_of_the_object_0', 'Center_of_the_object_1', 'index']], 
                          search_range=distance, memory=frame_gap, adaptive_stop=0.4*distance, 
@@ -780,6 +786,7 @@ class AmdTrkWidget(QWidget):
         trk = trk.sort_values(by=['trackId', 'frame'])
         trk.index = [_ for _ in range(trk.shape[0])]
 
+        self.mask = mask.copy()
         self.track = trk.copy()
         msg = 'Re-tracked.'
         return msg
@@ -789,6 +796,8 @@ class AmdTrkWidget(QWidget):
         The annotation format is track ID - (parentTrackId, optional) - stateColName
         """
         track = self.track.copy()
+        if self.hasState:
+            track.loc[pd.isnull(track[self.stateColName]), self.stateColName] = self.states[0]
         track = get_annotation(track, self.hasState, self.stateColName)
         self.track = track
         return
@@ -875,7 +884,7 @@ class AmdTrkWidget(QWidget):
                 self.track.loc[idx, 'trackId'] = trk_id
                 self.track.loc[idx, 'lineageId'] = trk_id
                 if self.hasState:
-                    self.track[self.stateColName].loc[idx] = cls
+                    self.track.loc[idx, self.stateColName] = cls
                 self.track = self.track.sort_values(by=['trackId', 'frame'])
                 msg = 'Assign obj: track ' + str(trk_id) + '; frame ' + str(frame) + '; state ' + cls + '.'
                 self.last_reg_id = trk_id
@@ -883,7 +892,7 @@ class AmdTrkWidget(QWidget):
             else:
                 raise ValueError('Object label has been used, draw with a bigger label. Current max label: ' +
                                   str(np.max(trk_slice['continuous_label'])))
-        if trk_id in list(trk_slice['trackId']):
+        if trk_id in list(trk_slice['trackId']) and trk_id != 0:
             raise ValueError('Track ID already exists in the selected frame.')
         if cls not in self.states:
             raise ValueError('Given state ID not registered.')
@@ -931,7 +940,10 @@ class AmdTrkWidget(QWidget):
         
         self.track = pd.concat([self.track, pd.DataFrame.from_dict([new_row])[self.track.columns]], ignore_index=True)
         self.track = self.track.sort_values(by=['trackId', 'frame'])
-        msg = 'New obj: track ' + str(trk_id) + '; frame ' + str(frame) + '; state ' + cls + '.'
+        if trk_id != 0:
+            msg = 'New obj: track ' + str(trk_id) + '; frame ' + str(frame) + '; state ' + cls + '.'
+        else:
+            msg = 'New unassigned obj: ' + 'frame ' + str(frame) + '; state ' + cls + '.'
         self.last_reg_id = trk_id
         return msg
 

@@ -109,24 +109,20 @@ def reader_function(path):
     stateCol = cfg['stateCol']
     track = pd.read_csv(track_path)
 
-    if stateCol is None:
-        phaseVis = False
-        states = ('0',)
-    else:
-        phaseVis = True
-        states = tuple(np.unique(track[stateCol]).astype('str'))
-    states = list(states)
-
     # if no state column specified, will use a dummy column.
     if stateCol is None:
         hasState = False
+        phaseVis = False
         stateColName = 'state'
         track['state'] = '0'
         states = ('0',)
     else:
         hasState = True
+        phaseVis = True
         stateColName = stateCol
-        states = tuple(np.unique(track[stateCol]).astype('str'))
+        statePool = track[stateCol]
+        states = tuple(np.unique(statePool[~pd.isnull(statePool)]).astype('str'))
+    states = list(states)
 
     def check_input_track(trk, hasState, stateColName):
         track = trk.copy()

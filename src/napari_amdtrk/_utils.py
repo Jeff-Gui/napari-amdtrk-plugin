@@ -35,18 +35,26 @@ def get_annotation(track, hasState, stateColName):
                 del inform[1]
             ann.append('-'.join(inform))
         else:
-            ann.append('unassigned')
+            if hasState:
+                if cls_lb[i] != cls_lb[i]: # for nan
+                    ann.append('unassigned')
+                else:
+                    ann.append('unassigned-' + cls_lb[i])
+            else:
+                ann.append('unassigned')
     track['name'] = ann
     return track
 
 
-def align_table_and_mask(table, mask, align_morph=False):
+def align_table_and_mask(table, mask, align_morph=False, phase_col=None, phase_default=None):
     """For every object in the mask, check if is consistent with the table. If no, remove the object in the mask.
 
     Args:
         table (pandas.DataFrame): (tracked) object table.
         mask (numpy.ndarray): labeled object mask, object label should be corresponding to `continuous_label` column in the table.
         align_morph (bool): align morphologically (match xy coordinate) or not.
+        phase_col (str): column name of cell phases.
+        phase_default (str): default phase, for registering unassigned objects.
     """
 
     count = 0
@@ -60,6 +68,7 @@ def align_table_and_mask(table, mask, align_morph=False):
     empty_row['parentTrackId'] = 0
     empty_row['trackId'] = 0      # set to NaN will cause napari error
     empty_row['lineageId'] = 0
+    empty_row[phase_col] = phase_default
     
     for i in range(mask.shape[0]):
         sub = table[table['frame'] == i].copy()
