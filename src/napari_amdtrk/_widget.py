@@ -96,7 +96,7 @@ class AmdTrkWidget(QWidget):
         @magicgui(labels=True, result_widget=True)
         def create_or_replace(track_A: int, track_B: int=0, frame: int=0):
             self.clear_selection()
-            self.check_assign([track_A, track_B])
+            self.check_assign([track_A, track_B] if track_B !=0 else [track_A])
             if track_B < 1:
                 track_B = None
             msg = self.create_or_replace(track_A, frame, track_B)
@@ -386,7 +386,7 @@ class AmdTrkWidget(QWidget):
             wig()
             return
 
-        @self.viewer.bind_key('Up')
+        @self.viewer.bind_key('Up', overwrite=True)
         def _toggle_up(self):
             nonlocal btns, phaseVis
             if btns.value == 1:
@@ -395,7 +395,7 @@ class AmdTrkWidget(QWidget):
                     btns.value -= 1
             return
         
-        @self.viewer.bind_key('Down')
+        @self.viewer.bind_key('Down', overwrite=True)
         def _toggle_down(self):
             nonlocal btns, phaseVis
             if btns.value == 10:
