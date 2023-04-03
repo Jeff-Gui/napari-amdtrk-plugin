@@ -9,7 +9,7 @@
 
 Amend segmentation and track within napari manually.
 
-### [:eyes: watch a demo video](https://drive.google.com/file/d/1QaznCutqvyXiLP3-ERDjmO33fHNM7G7d/view?usp=sharing)
+### [:eyes: watch a demo video](https://drive.google.com/file/d/1oHPdYcKv-QgOWylm21DnOF1NlVNsRIcL/view)
 
 ----------------------------------
 
@@ -40,7 +40,7 @@ Napari-amdtrk reads an input directory which includes:
 1. `File` > `Open folder` > choose `Amend segmentation and track`
 2. `Plugins` > `napari-amdtrk: Amend track widget` > `Run`
 
-Please check out the demo video [here](https://drive.google.com/file/d/1QaznCutqvyXiLP3-ERDjmO33fHNM7G7d/view?usp=sharing) and the sample data (see below).
+Please check out the demo video [here](https://drive.google.com/file/d/1oHPdYcKv-QgOWylm21DnOF1NlVNsRIcL/view) and the sample data (see below).
 
 ----------------------------------
 
