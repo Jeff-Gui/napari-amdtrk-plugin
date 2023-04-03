@@ -7,28 +7,53 @@
 [![codecov](https://codecov.io/gh/Jeff-Gui/napari-amdtrk/branch/main/graph/badge.svg)](https://codecov.io/gh/Jeff-Gui/napari-amdtrk)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-amdtrk)](https://napari-hub.org/plugins/napari-amdtrk)
 
-Amend segmentation and track within napari manually
+Amend segmentation and track within napari manually.
 
-### [:eyes: watch a demo video](https://drive.google.com/file/d/1edC9Hw7e4FgD5QXDuUb45dAwRFt-TXFS/preview)
+### [:eyes: watch a demo video](https://drive.google.com/file/d/1QaznCutqvyXiLP3-ERDjmO33fHNM7G7d/view?usp=sharing)
 
 ----------------------------------
 
 ### Input data structure
 
-The essential input files include:
-- An intensity image (`tif`)
-- An object mask (`tif`)
-- An object table (`csv`)
-- A config file named `config.yaml`
+Napari-amdtrk reads an input directory which includes:
+- An intensity image (`tif`) in txyc (or txy) format
+- An object mask (`tif`) in txy format
+- An object table (`csv`) with following essential columns:
+    - frame: time frame
+    - trackId: ID of the track, starting from 1
+    - Center_of_the_object_0: x coordinate
+    - Center_of_the_object_1: y coordinate
+    - continuous_label: the corresponding label (intensity value) of the object in the object mask (You may use `skimage.measure.label` to get it from a binary mask.)
 
-    Within the config file, there should be 
+- A config file named `config.yaml` (_other names are not allowed_)
+
+    Within the config file, there should be:
+    - intensity_suffix: suffix of the intensity image (e.g., for `foo_GFP.tif`, use `GFP` in the config)
+    - mask_suffix: suffix of the mask image
+    - track_suffix: suffix of the tracked object table
+    - frame_base: index of the first frame (either `0` or `1`)
+    - stateCol: __optional__ column name for the cell state (e.g., cell cycle phase) in the object table. Leave blank if the object table does not contain it.
+
+---
+### Quick start
+
+1. `File` > `Open folder` > choose `Amend segmentation and track`
+2. `Plugins` > `napari-amdtrk: Amend track widget` > `Run`
+
+Please check out the demo video [here](https://drive.google.com/file/d/1QaznCutqvyXiLP3-ERDjmO33fHNM7G7d/view?usp=sharing) and the sample data (see below).
 
 ----------------------------------
 
 ### Sample data
 
-Sample cell track videos have been published with [_pcnaDeep: a fast and robust single-cell tracking method using deep-learning mediated cell cycle profiling_](10.1093/bioinformatics/btac602).
+Sample data (cell track videos) have been published with [_pcnaDeep: a fast and robust single-cell tracking method using deep-learning mediated cell cycle profiling_](10.1093/bioinformatics/btac602). Please cite this repository if using the plugin for publication.
 
+To load sample data, `File` > `Open Sample` > `napari-amdtrk` > `basic tracks` or `complete cell cycle tracks`.
+
+- basic tracks: simple cell tracks as essential input data.
+- complete cell cycle tracks: cell tracks with additional cell cycle features.
+
+The above operations will download data to `~/.amd_trk/_sample_data/` (__~230MB__). After downloading is finished, sample data will be loaded.
 
 ----------------------------------
 

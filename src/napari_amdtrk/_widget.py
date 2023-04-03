@@ -154,13 +154,13 @@ class AmdTrkWidget(QWidget):
 
         @magicgui(labels=True,
                 result_widget=True,
-                phase={
+                state={
                     'widget_type': 'ComboBox',
                     'choices': states
                 })
-        def register_obj(object_ID: int, frame: int, track: int, phase=states[0]):
+        def register_obj(object_ID: int, frame: int, track: int, state=states[0]):
             self.clear_selection()
-            msg = self.register_obj(object_ID, frame, track, phase)
+            msg = self.register_obj(object_ID, frame, track, state)
             self.refresh()
             return msg
 
