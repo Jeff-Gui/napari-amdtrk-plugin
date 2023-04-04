@@ -9,7 +9,7 @@
 
 Amend segmentation and track within napari manually.
 
-<img src=".napari/preview.png" alt="overview" width="900" />
+<img src="preview.png" alt="overview" width="900" />
 
 
 ### [:eyes: watch a demo video](https://drive.google.com/file/d/1oHPdYcKv-QgOWylm21DnOF1NlVNsRIcL/view)
