@@ -18,7 +18,7 @@ import trackpy
 
 if TYPE_CHECKING:
     import napari
-
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
 
 class AmdTrkWidget(QWidget):
     # your QWidget.__init__ can optionally request the napari viewer instance
@@ -251,7 +251,7 @@ class AmdTrkWidget(QWidget):
             delete.update({'track':0, 'frame':0})
             phase.update({'track':0, 'frame_start':0})
             delete_par.update({'daughter':0})
-            register_obj.update({'object_ID':0, 'frame':0, 'track':0, 'phase': self.states[0]})
+            register_obj.update({'object_ID':0, 'frame':0, 'track':0, 'state': self.states[0]})
             keep_tracks.update({'IDs':''})
             copy_obj.update({'ID':0, 'fromFrame':0, 'toFrame':1})
             retrack.update({'distance':0, 'frame_gap':0})
@@ -317,7 +317,7 @@ class AmdTrkWidget(QWidget):
                         self.label_unassigned = lbl
                         phase.update({'track':trk_id, 'frame_start':pos[0]})
                         delete_par.update({'daughter':trk_id})
-                        register_obj.update({'object_ID':lbl, 'frame':pos[0], 'track':trk_id, 'phase': state})
+                        register_obj.update({'object_ID':lbl, 'frame':pos[0], 'track':trk_id, 'state': state})
                         copy_obj.update({'ID':lbl, 'fromFrame':pos[0], 'toFrame': pos[0] + 1})
 
                         # find the bounding box
@@ -360,7 +360,7 @@ class AmdTrkWidget(QWidget):
                         self.label_unassigned = -1
                         phase.update({'track':0, 'frame_start':0})
                         delete_par.update({'daughter':0})
-                        register_obj.update({'object_ID':0, 'frame':0, 'track':0, 'phase': self.states[0]})
+                        register_obj.update({'object_ID':0, 'frame':0, 'track':0, 'state': self.states[0]})
                         copy_obj.update({'ID':0, 'fromFrame':0, 'toFrame':1})
 
                         if not flg:
@@ -372,7 +372,10 @@ class AmdTrkWidget(QWidget):
                         self.clear_selection()
                 else:
                     # update maximum label of the frame to title
-                    fme = int(self.viewer.status.split('[')[1].lstrip().split(' ')[0])
+                    vstatus = self.viewer.status
+                    if isinstance(vstatus, dict):
+                        vstatus = vstatus['coordinates']
+                    fme = int(vstatus.split('[')[1].lstrip().split(' ')[0])
                     mxLabel = self.get_mx(fme)
                     self.viewer.title = 'AmdTrk | Max label of frame: ' + str(fme) + ' is ** ' + str(mxLabel) + ' **'
                     self.viewer.layers[self.segm_id].selected_label = mxLabel + 1
