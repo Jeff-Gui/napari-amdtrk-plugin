@@ -40,8 +40,10 @@ Napari-amdtrk reads an input directory which includes:
 ---
 ### Quick start
 
-1. `File` > `Open folder` > choose `Amend segmentation and track`
-2. `Plugins` > `napari-amdtrk: Amend track widget` > `Run`
+1. Open `napari` GUI.
+2. `File` > `Open folder` > choose `Amend segmentation and track`
+3. `Plugins` > `napari-amdtrk: Amend track widget` > `Run`
+4. In `layer list`, select the `segm` layer to start editing.
 
 Please check out the demo video [here](https://drive.google.com/file/d/1oHPdYcKv-QgOWylm21DnOF1NlVNsRIcL/view) and the sample data (see below).
 
@@ -49,14 +51,18 @@ Please check out the demo video [here](https://drive.google.com/file/d/1oHPdYcKv
 
 ### Sample data
 
-Sample data (cell track videos) have been published with [_pcnaDeep: a fast and robust single-cell tracking method using deep-learning mediated cell cycle profiling_](10.1093/bioinformatics/btac602). Please cite this repository if using the plugin for publication.
-
 To load sample data, `File` > `Open Sample` > `napari-amdtrk` > `basic tracks` or `complete cell cycle tracks`.
 
 - basic tracks: simple cell tracks as essential input data.
 - complete cell cycle tracks: cell tracks with additional cell cycle features.
 
 The above operations will download data to `~/.amd_trk/_sample_data/` (__~230MB__). After downloading is finished, sample data will be loaded.
+
+_Notes_
+- Please cite this repository if using the plugin in your work (try `About` > `Cite this repository` upper right of this homepage).
+  
+- Sample data (cell track videos) have been published with [_pcnaDeep: a fast and robust single-cell tracking method using deep-learning mediated cell cycle profiling_](10.1093/bioinformatics/btac602). We acknowledge Dr Kuan Yoow Chan and members of his lab for generating the data. 
+
 
 ----------------------------------
 
@@ -72,17 +78,14 @@ https://napari.org/stable/plugins/index.html
 
 ## Installation
 
+Please install `napari` GUI first:
+
+    python -m pip install "napari[all]"
+
 You can install `napari-amdtrk` via [pip]:
 
     pip install napari-amdtrk
 
-
-
-
-## Contributing
-
-Contributions are very welcome. Tests can be run with [tox], please ensure
-the coverage at least stays the same before you submit a pull request.
 
 ## License
 

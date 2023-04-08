@@ -663,12 +663,17 @@ class AmdTrkWidget(QWidget):
             trk_id (int): track ID.
             frame (int): time frame.
         """
+        del_unreg_sel = False
         if trk_id not in self.track['trackId'].values:
-            raise ValueError('Selected track is not in the table.')
+            if trk_id == 0:
+                del_unreg_sel = True
+            else:
+                raise ValueError('Selected track is not in the table.')
 
         mask = self.viewer.layers[self.segm_id].data
-        del_trk = self.track[self.track['trackId'] == trk_id]
-        if frame is None:
+        if not del_unreg_sel:
+            del_trk = self.track[self.track['trackId'] == trk_id]
+        if frame is None and not del_unreg_sel:
 
             if trk_id != 0:
                 # For all direct daughter of the track to delete, first remove association
@@ -700,11 +705,13 @@ class AmdTrkWidget(QWidget):
                 self.track = self.track.drop(index=self.track[(self.track['trackId'] == trk_id) &
                                                               (self.track['frame'] == frame)].index)
                 msg = 'Deleted track ' + str(trk_id) + ' at frame ' + str(frame) + '.'
-            else:
+            elif not del_unreg_sel:
                 self.track = self.track.drop(index=self.track[(self.track['trackId'] == trk_id) &
                                                               (self.track['frame'] == frame) &
                                                               (self.track['continuous_label'] == lb)].index)
                 msg = 'Deleted unassigned object ' + str(lb) + ' at frame ' + str(frame) + '.'
+            else:
+                msg = 'Deleted an unregistered object.'
         self.viewer.layers[self.segm_id].data = mask
         print(msg)
         return msg
