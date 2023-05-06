@@ -93,17 +93,21 @@ def reader_function(path):
     except:
         raise FileNotFoundError('Missing config file.')
     
-    intensity_path, mask_path, track_path = '', '', ''
+    intensity_path, mask_path, track_path = [], '', ''
+    its_list = cfg['intensity_suffix'].split(',')
+    for i in range(len(its_list)):
+        its_list[i] = its_list[i].strip()
+
     for fname in os.listdir(path):
         sfx = fname.split('.')[0].split('_')[-1]
-        if sfx == cfg['intensity_suffix']:
-            intensity_path = os.path.join(path, fname)
+        if sfx in its_list:
+            intensity_path.append(os.path.join(path, fname))
         if sfx == cfg['mask_suffix']:
             mask_path = os.path.join(path, fname)
         if sfx == cfg['track_suffix']:
             track_path = os.path.join(path, fname)
     
-    if intensity_path == '' or mask_path == '' or track_path == '':
+    if intensity_path == [] or mask_path == '' or track_path == '':
         raise ValueError('Missing input file, check if filenames match the config.')
         
     stateCol = cfg['stateCol']
@@ -141,13 +145,22 @@ def reader_function(path):
     mask = io.imread(mask_path)
 
     rt = []
+    i = 1
+    colors = ['green', 'red', 'yellow', 'blue', 'magenta', 'cyan']
+    if len(intensity_path) == 1:
+        colors[0] = 'gray'
     if intensity_path is not None:
-        comp = io.imread(intensity_path)
-        if len(comp.shape) > 3:
-            for i in range(comp.shape):
-                rt.append((comp[:, :, :, i], {'name':'intensity' + str(i)}, 'image'))
-        else:
-            rt.append((comp, {'name':'intensity0'}, 'image'))
+        for j in range(len(intensity_path)):
+            comp = io.imread(intensity_path[j])
+            if len(comp.shape) > 3:
+                for i in range(comp.shape):
+                    rt.append((comp[:, :, :, i], {'name':'intensity_' + str(i), 'blending':'additive',
+                                                  'colormap':colors[i-1] if i<7 else 'gray'}, 'image'))
+                    i += 1
+            else:
+                rt.append((comp, {'name':'intensity_' + str(i), 'blending':'additive',
+                                  'colormap':colors[i-1] if i<7 else 'gray'}, 'image'))
+                i += 1
 
     rt.append((mask, {'name':'segm','metadata':{'frame_base': cfg['frame_base'], 'stateCol': stateCol, 
                         'stateColName': stateColName, 'track_path': track_path, 'phaseVis': phaseVis,

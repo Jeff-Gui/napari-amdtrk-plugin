@@ -9,10 +9,11 @@ import warnings
 from magicgui import magicgui
 from magicgui.widgets import RadioButtons, Container
 from qtpy.QtWidgets import QWidget
-from ._utils import get_current_time, get_layer_id_by_name, find_daugs, align_table_and_mask, get_annotation
+from ._utils import get_current_time, find_daugs, align_table_and_mask, get_annotation
 import numpy as np
 import skimage.io as io
 import skimage.measure as measure
+import skimage.morphology as morph
 import pandas as pd
 import trackpy
 
@@ -29,11 +30,8 @@ class AmdTrkWidget(QWidget):
 
         super().__init__()
         self.viewer = viewer
-        self.segm_id = get_layer_id_by_name(self.viewer, 'segm')
-        self.track_id = get_layer_id_by_name(self.viewer, 'tracks')
-        self.name_id = get_layer_id_by_name(self.viewer, 'name')
         # meta: {'frame_base': int, 'stateCol': int, 'stateColName': str, 'track_path': str, 'mask_path': str}
-        meta = self.viewer.layers[self.segm_id].metadata
+        meta = self.viewer.layers['segm'].metadata
         self.frame_base = meta['frame_base']
         self.stateCol = meta['stateCol']
         self.stateColName = meta['stateColName']
@@ -44,15 +42,15 @@ class AmdTrkWidget(QWidget):
         self.hasState = meta['hasState']
         self.states = meta['states']
 
-        self.track = self.viewer.layers[self.track_id].metadata['ori_data']
+        self.track = self.viewer.layers['tracks'].metadata['ori_data']
         self.saved = self.track.copy()
-        self.mask = self.viewer.layers[self.segm_id].data.copy()
+        self.mask = self.viewer.layers['segm'].data.copy()
         self.track_count = int(np.max(self.track['trackId']))
-        self.DILATE_FACTOR = int((self.viewer.layers[self.segm_id].data.shape[1] + 
-                                  self.viewer.layers[self.segm_id].data.shape[2]) / 2 / 240)
+        self.DILATE_FACTOR = int((self.viewer.layers['segm'].data.shape[1] + 
+                                  self.viewer.layers['segm'].data.shape[2]) / 2 / 240)
 
-        self.high = 255 if np.max(self.viewer.layers[self.segm_id].data) < 255 else 65536
-        self.select = {}  # register selected obj (key: frame-label, value: (mask,contour))
+        self.high = 255 if np.max(self.viewer.layers['segm'].data) < 255 else 65536
+        self.select = {}  # register selected obj (key: frame-label, value: (bbox, id in sel list, frame, label on mask))
         self.last_reg_id = 0
         self.label_unassigned = -1
 
@@ -259,10 +257,10 @@ class AmdTrkWidget(QWidget):
 
         self.viewer.add_shapes(name='[selection]', edge_width=2*self.DILATE_FACTOR, edge_color='coral', face_color=[0,0,0,0], ndim=3)
         
-        labels = self.viewer.layers[self.segm_id]
+        labels = self.viewer.layers['segm']
         #sels = self.viewer.layers['[selection]']
-        #trkly = self.viewer.layers[self.track_id]
-        #namely = self.viewer.layers[self.name_id]
+        #trkly = self.viewer.layers['tracks']
+        #namely = self.viewer.layers['name']
         
         #@sels.mouse_drag_callbacks.append
         @labels.mouse_drag_callbacks.append
@@ -327,11 +325,11 @@ class AmdTrkWidget(QWidget):
                                            [pos[0], maxx, maxy], [pos[0], minx, maxy]])
                         idx = len(viewer.layers['[selection]'].data)
                         new = viewer.layers['[selection]'].data.copy() + [objBox]
-                        self.select[ky] = (objBox, idx)
+                        self.select[ky] = (objBox, idx, pos[0], lbl)
 
                     else:  # delete object highlight (deselect)
                         
-                        _, idx = self.select[ky]
+                        _, idx, _, _ = self.select[ky]
                         new = viewer.layers['[selection]'].data.copy()
                         del new[idx]
 
@@ -378,7 +376,7 @@ class AmdTrkWidget(QWidget):
                     fme = int(vstatus.split('[')[1].lstrip().split(' ')[0])
                     mxLabel = self.get_mx(fme)
                     self.viewer.title = 'AmdTrk | Max label of frame: ' + str(fme) + ' is ** ' + str(mxLabel) + ' **'
-                    self.viewer.layers[self.segm_id].selected_label = mxLabel + 1
+                    self.viewer.layers['segm'].selected_label = mxLabel + 1
                     self.clear_selection()
 
         @self.viewer.bind_key('Enter')
@@ -410,6 +408,46 @@ class AmdTrkWidget(QWidget):
                     btns.value += 1
             return
 
+
+        def _run_dilate_sel(mode='dilate'):
+            nonlocal self
+            sel = list(self.select.keys())
+            if len(sel) == 0:
+                return
+            else:
+                mask = self.viewer.layers['segm'].data
+                bbox, _, fid, lbl = self.select[sel[0]]
+                frame = mask[fid,:,:].copy()
+                frame_copy = frame.copy()
+                frame[frame!=lbl] = 0
+                frame[frame==lbl] = 1
+                to_dilate = int(np.max([bbox[2,1] - bbox[0,1], bbox[2,2] - bbox[2,1]]) / 80) # What's good scaling here???
+                if mode == 'dilate':
+                    dilated = morph.binary_dilation(frame, footprint=morph.disk(radius=to_dilate))
+                elif mode == 'erode':
+                    dilated = morph.binary_erosion(frame, footprint=morph.disk(radius=to_dilate))
+                else:
+                    return
+                if mode == 'erode':
+                    frame_copy[frame_copy==lbl] = 0
+                frame_copy[dilated] = lbl
+                mask[fid,:,:] = frame_copy
+                self.viewer.layers['segm'].data = mask
+                #self.refresh()
+            return
+    
+        @self.viewer.bind_key('Control-0', overwrite=True)
+        def _dilate_sel(self):
+            nonlocal _run_dilate_sel
+            _run_dilate_sel(mode='dilate')
+            return
+
+        @self.viewer.bind_key('Control-9', overwrite=True)
+        def _erode_sel(self):
+            nonlocal _run_dilate_sel
+            _run_dilate_sel(mode='erode')
+            return
+
         # Update the layer dropdown menu when the layer list changes
         self.viewer.layers.events.changed.connect(container_ext.reset_choices)
         # Add plugin to the napari viewer
@@ -430,7 +468,6 @@ class AmdTrkWidget(QWidget):
             if i == 0:
                 raise ValueError('Must first assign track ID to the object!')
         return
-
 
     #================== Widget functions =======================
 
@@ -670,7 +707,7 @@ class AmdTrkWidget(QWidget):
             else:
                 raise ValueError('Selected track is not in the table.')
 
-        mask = self.viewer.layers[self.segm_id].data
+        mask = self.viewer.layers['segm'].data
         if not del_unreg_sel:
             del_trk = self.track[self.track['trackId'] == trk_id]
         if frame is None and not del_unreg_sel:
@@ -712,14 +749,14 @@ class AmdTrkWidget(QWidget):
                 msg = 'Deleted unassigned object ' + str(lb) + ' at frame ' + str(frame) + '.'
             else:
                 msg = 'Deleted an unregistered object.'
-        self.viewer.layers[self.segm_id].data = mask
+        self.viewer.layers['segm'].data = mask
         print(msg)
         return msg
 
     def run_keep_tracks(self, trk_ids):
         """Only keep tracks specified in the input list.
         """
-        mask = self.viewer.layers[self.segm_id].data
+        mask = self.viewer.layers['segm'].data
 
         for trk_id in trk_ids:
             if trk_id in self.track['trackId']:  # no warning if input track is not in the dataset.
@@ -742,7 +779,7 @@ class AmdTrkWidget(QWidget):
                 new_mask[msk_slice == l] = l
             mask[frame, :, :] = new_mask
     
-        self.viewer.layers[self.segm_id].data = mask
+        self.viewer.layers['segm'].data = mask
 
         msg = 'Tracks kept: ' + ','.join(list(map(lambda x:str(x), trk_ids))) + '.'
         print(msg)
@@ -751,7 +788,7 @@ class AmdTrkWidget(QWidget):
     def save(self, mask_flag=True):
         """Save current table.
         """
-        mask = self.viewer.layers[self.segm_id].data
+        mask = self.viewer.layers['segm'].data
         track = self.track.copy()
         if mask_flag:
             mask, track = align_table_and_mask(track, mask, align_morph=False, 
@@ -772,14 +809,14 @@ class AmdTrkWidget(QWidget):
     def revert(self):
         """Revert to last saved version.
         """
-        self.viewer.layers[self.segm_id].data = self.mask.copy()
+        self.viewer.layers['segm'].data = self.mask.copy()
         self.track = self.saved.copy()
         msg = 'Reverted: ' + get_current_time() + '.'
         return msg
     
     def retrack(self, distance, frame_gap):
         trk = self.track.copy()
-        mask = self.viewer.layers[self.segm_id].data
+        mask = self.viewer.layers['segm'].data
         mask, trk = align_table_and_mask(trk, mask, align_morph=False)   
         trk['index'] = trk.index
         t = trackpy.link(trk[['frame', 'Center_of_the_object_0', 'Center_of_the_object_1', 'index']], 
@@ -883,7 +920,7 @@ class AmdTrkWidget(QWidget):
             trk_id (int): Track ID.
             cls (str): State id.
         """
-        mask = self.viewer.layers[self.segm_id].data
+        mask = self.viewer.layers['segm'].data
         msk_slice = mask[frame, :, :]
         trk_slice = self.track[self.track['frame'] == frame]
         untracked = False if int(trk_id) > 0 else True          # register as an untracked object
@@ -962,7 +999,7 @@ class AmdTrkWidget(QWidget):
         if fromFrame == toFrame:
             raise ValueError('Cannot copy object on the same frame.')
         row = self.track[(self.track['frame'] == fromFrame) & (self.track['continuous_label'] == ID)]
-        mask = self.viewer.layers[self.segm_id].data
+        mask = self.viewer.layers['segm'].data
         if row.shape[0] != 1:
             # If unassigned object found in fromFrame, register it first.
             if ID in np.unique(mask[fromFrame,:,:]):
@@ -981,12 +1018,12 @@ class AmdTrkWidget(QWidget):
         fromMask = mask[fromFrame,:,:]
         toMask[fromMask==ID] = tar_mx + 1
         mask[toFrame,:,:] = toMask
-        self.viewer.layers[self.segm_id].data = mask
+        self.viewer.layers['segm'].data = mask
         msg = ''
         return msg
 
     def get_mx(self, frame):
-        mask = self.viewer.layers[self.segm_id].data
+        mask = self.viewer.layers['segm'].data
         return int(np.max(mask[frame,:,:]))
 
     def refresh(self):
@@ -994,12 +1031,12 @@ class AmdTrkWidget(QWidget):
         track_data = self.track.loc[:][['trackId', 'frame', 'Center_of_the_object_1', 'Center_of_the_object_0']].copy()
         track_data = track_data[track_data['trackId']>0] # unassigned tracks have ID=0, not allowed for napari to plot.
         track_data = track_data.to_numpy().astype('float')
-        self.viewer.layers[self.track_id].data = track_data
+        self.viewer.layers['tracks'].data = track_data
         label_data = self.track.loc[:][['frame', 'Center_of_the_object_1', 'Center_of_the_object_0']]
         label_data = label_data.to_numpy()
         # self.layers[nm_idx].features.clear()
-        self.viewer.layers[self.name_id].data = label_data
-        self.viewer.layers[self.name_id].features['name'] = self.track.loc[:]['name'].to_numpy()
-        self.viewer.layers[self.name_id].refresh_text()
+        self.viewer.layers['name'].data = label_data
+        self.viewer.layers['name'].features['name'] = self.track.loc[:]['name'].to_numpy()
+        self.viewer.layers['name'].refresh_text()
         self.clear_selection()
         return

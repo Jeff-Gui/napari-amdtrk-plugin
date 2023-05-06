@@ -26,16 +26,18 @@ Napari-amdtrk reads an input directory which includes:
     - trackId: ID of the track, starting from 1
     - Center_of_the_object_0: x coordinate
     - Center_of_the_object_1: y coordinate
-    - continuous_label: the corresponding label (intensity value) of the object in the object mask (You may use `skimage.measure.label` to get it from a binary mask.)
+    - continuous_label: the corresponding label (intensity value) of the object in the object mask (You may use `skimage.measure.label` to get it from a binary mask).
 
 - A config file named `config.yaml` (_other names are not allowed_)
 
     Within the config file, there should be:
-    - intensity_suffix: suffix of the intensity image (e.g., for `foo_GFP.tif`, use `GFP` in the config)
+    - intensity_suffix: suffix of the intensity image (e.g., for `foo_GFP.tif`, use `GFP` in the config). For multiple intensity images, separate them with commas (e.g., `GFP, mCherry`)
     - mask_suffix: suffix of the mask image
     - track_suffix: suffix of the tracked object table
     - frame_base: index of the first frame (either `0` or `1`)
-    - stateCol: __optional__ column name for the cell state (e.g., cell cycle phase) in the object table. Leave blank if the object table does not contain it.
+    - stateCol: __optional__ column name for the cell state (e.g., cell cycle phase) in the object table. Leave blank if the object table does not contain it
+
+__Napari-amdtrk will modify mask and track files in place.__ Other files are not affected.
 
 ---
 ### Quick start
@@ -62,6 +64,17 @@ _Notes_
 - Please cite this repository if using the plugin in your work (try `About` > `Cite this repository` upper right of this homepage).
   
 - Sample data (cell track videos) have been published with [_pcnaDeep: a fast and robust single-cell tracking method using deep-learning mediated cell cycle profiling_](10.1093/bioinformatics/btac602). We acknowledge Dr Kuan Yoow Chan and members of his lab for generating the data. 
+
+----------------------------------
+
+### Keyboard shortcuts
+
+- <kbd>&uarr;</kbd> and <kbd>&darr;</kbd>: toggle different operations
+- <kbd>enter</kbd>: run the operation
+
+- Available to a selected object:
+  - <kbd>control</kbd> + <kbd>9</kbd>: shrink the object mask
+  - <kbd>control</kbd> + <kbd>0</kbd>: expand the object mask
 
 
 ----------------------------------
